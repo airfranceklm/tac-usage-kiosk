@@ -53,12 +53,14 @@ public class TACClient {
      * @param track the track
      * @param bookingPassenger the booking passenger
      * @param controlDate the date, set to first segment's departure date
+     * @param fromCountry    the first departure country code
+     * @param toCountry      the final destination country code
      * @return true if health clearance is verified
      */
-    public boolean verifyHealthClearance(String track, Passenger bookingPassenger, DateTime controlDate) {
+    public boolean verifyHealthClearance(String track, Passenger bookingPassenger, DateTime controlDate, String fromCountry, String toCountry) {
         boolean validTrackDataForGivenPassenger;
         try {
-            TACResponse tacResponse = restTemplate.postForObject(getUrl(track, controlDate), formHttpHeaders(), track, TACResponse.class);
+            TACResponse tacResponse = restTemplate.postForObject(getUrl(track, controlDate, fromCountry, toCountry), formHttpHeaders(), track, TACResponse.class);
             validTrackDataForGivenPassenger = isValidTrackDataForGivenPassenger(tacResponse, bookingPassenger);
         }
         catch (HttpClientErrorException exception) {
@@ -143,8 +145,19 @@ public class TACClient {
         // TAC API endpoints are maintained in admin config, for 2 reasons 
         // 1) Configurable per environment. Different values from pre-prod & prod 
         // 2) If any changes there, that can be achived without any deployment
-        String tacUrl = StringUtils.startsWithIgnoreCase(track, TAC_API_DCC_TRACK_DATA_IDENTIFIER) ? environment.getProperty("tac.dcc.endpoint") : environment.getProperty("tac.2ddoc.endpoint");
-        return controlDate != null ? tacUrl + "?controlDate=" + controlDate.toString("yyyy-MM-dd'T'hh:mm:ss") : tacUrl;
+        String tacUri = StringUtils.startsWithIgnoreCase(track, "HC") ? environment.getProperty(TAC_INTERNATIONAL_ENDPOINT) : environment.getProperty(TAC_DOMESTIC_ENDPOINT);
+        String tacUrl = "";
+        if (StringUtils.isNotBlank(tacUri)) {
+            MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
+            queryParams.add("fromCountry", fromCountry);
+            queryParams.add("toCountry", toCountry);
+            queryParams.add("travelType", DEPARTURE);
+            if (controlDate != null) {
+                queryParams.add("controlDate", controlDate.toString("yyyy-MM-dd'T'HH:mm:ss"));
+            }
+            tacUrl = UriComponentsBuilder.fromUriString(tacUri).queryParams(queryParams).build().toUriString();
+        }
+        return tacUrl;
     }
 
     /**
