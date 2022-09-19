@@ -30,6 +30,9 @@ public class TACClient {
     // Intentionally left empty to not expose TAC response details
     private static final String TAC_API_RESPONSE_STATUS_VALUE_VALID = ""; 
     private static final String TAC_API_DCC_TRACK_DATA_IDENTIFIER = "";
+    private static final String RESOURCE_TYPE_DCC_VACCINATION = "";
+    private static final String RESOURCE_TYPE_DCC_TEST = "";
+    private static final String RESOURCE_TYPE_DCC_RECOVERY = "";
 
     private final CustomRestTemplate restTemplate;
     private final Environment environment;
@@ -99,13 +102,34 @@ public class TACClient {
         if (tacResponse != null && tacResponse.getData() != null && CollectionUtils.isNotEmpty(tacResponse.getData().getDynamicDataList())) {
             TACData tacResponseData = tacResponse.getData();
             DynamicData dynamicData = tacResponseData.getDynamicDataList().get(0);
-            boolean dataStatusValid = false;
-            if (dynamicData != null) {
-                dataStatusValid = TAC_API_RESPONSE_STATUS_VALUE_VALID.equals(dynamicData.getLiteValidityStatus());
+            if (dynamicData != null && tacResponse.getResourceType() != null) {
+                //The value passed here for status is a constant so no need to check null condition here
+                valid = isGivenStatusMatchedWithResponseStatus(dynamicData, TAC_API_RESPONSE_STATUS_VALUE_VALID, tacResponse.getResourceType());
             }
-            valid = dataStatusValid;
         }
         return valid;
+    }
+
+    /**
+     * Common method to check different result according to resource type
+     *
+     * @param dynamicData  the dynamicData
+     * @param status       the status to be checked
+     * @param resourceType the resourceType to be checked
+     * @return true if status given is matched otherwise false
+     */
+    private static boolean isGivenStatusMatchedWithResponseStatus(DynamicData dynamicData, String status, String resourceType) {
+        OtRuleEngineResult otRuleEngineResult = null;
+        if (RESOURCE_TYPE_DCC_VACCINATION.equalsIgnoreCase(resourceType)) {
+            otRuleEngineResult = dynamicData.getOtVaccinationRuleEngineResult();
+        }
+        else if (RESOURCE_TYPE_DCC_TEST.equalsIgnoreCase(resourceType)) {
+            otRuleEngineResult = dynamicData.getOtTestRuleEngineResult();
+        }
+        else if (RESOURCE_TYPE_DCC_RECOVERY.equalsIgnoreCase(resourceType)) {
+            otRuleEngineResult = dynamicData.getOtRecoveryRuleEngineResult();
+        }
+        return otRuleEngineResult != null && otRuleEngineResult.getCountry() != null && status.equalsIgnoreCase(otRuleEngineResult.getCountry().getValidityStatus());
     }
 
     /**
